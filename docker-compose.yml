@@ -1,0 +1,71 @@
+version: '3.9'
+
+services:
+  webhook-ingest:
+    build:
+      context: ../../
+      dockerfile: modules/webhook-ingest/Dockerfile
+    container_name: webhook-ingest
+    ports:
+      - "9091:9091"
+    environment:
+      - KAFKA_BOOTSTRAPSERVERS=${KAFKA_BOOTSTRAPSERVERS}
+      - KAFKA_SECURITY_PROTOCOL=${KAFKA_SECURITY_PROTOCOL}
+      - KAFKA_SASL_MECHANISM=${KAFKA_SASL_MECHANISM}
+      - KAFKA_SASL_JAAS_CONFIG=${KAFKA_SASL_JAAS_CONFIG}
+      - KAFKA_TOPIC_AZURE_PR_EVENTS=${KAFKA_TOPIC_AZURE_PR_EVENTS}
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - azure-pr-reviewer-network
+
+  reviewer-service:
+    build:
+      context: ../../
+      dockerfile: modules/reviewer-service/Dockerfile
+    container_name: reviewer-service
+    ports:
+      - "9092:9092"
+    environment:
+      - ADO_BASE_URL=${ADO_BASE_URL}
+      - ADO_PROJECT_ID=${ADO_PROJECT_ID}
+      - ADO_PAT=${ADO_PAT}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_MODEL=${AZURE_OPENAI_MODEL}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT}
+      - OTLP_AUTH_HEADER=${OTLP_AUTH_HEADER}
+      - KAFKA_BOOTSTRAPSERVERS=${KAFKA_BOOTSTRAPSERVERS}
+      - KAFKA_SECURITY_PROTOCOL=${KAFKA_SECURITY_PROTOCOL}
+      - KAFKA_SASL_MECHANISM=${KAFKA_SASL_MECHANISM}
+      - KAFKA_SASL_JAAS_CONFIG=${KAFKA_SASL_JAAS_CONFIG}
+      - KAFKA_TOPIC_AZURE_PR_EVENTS=${KAFKA_TOPIC_AZURE_PR_EVENTS}
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      webhook-ingest:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9092/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - azure-pr-reviewer-network
+
+networks:
+  azure-pr-reviewer-network:
+    driver: bridge
+
+volumes:
+  logs:
+    driver: local
