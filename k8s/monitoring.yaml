@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: ServiceMonitor
+metadata:
+  name: webhook-ingest-monitor
+  labels:
+    app: webhook-ingest
+spec:
+  selector:
+    matchLabels:
+      app: webhook-ingest
+  endpoints:
+  - port: 9091
+    path: /actuator/prometheus
+---
+apiVersion: v1
+kind: ServiceMonitor
+metadata:
+  name: reviewer-service-monitor
+  labels:
+    app: reviewer-service
+spec:
+  selector:
+    matchLabels:
+      app: reviewer-service
+  endpoints:
+  - port: 9092
+    path: /actuator/prometheus
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard
+data:
+  azure-pr-reviewer-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "Azure PR Reviewer Dashboard",
+        "panels": [
+          {
+            "title": "HTTP Requests",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(http_requests_total[5m])",
+                "legendFormat": "{{service}} - {{method}}"
+              }
+            ]
+          },
+          {
+            "title": "LLM Response Time",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(llm_review_duration_seconds_bucket[5m]))",
+                "legendFormat": "95th percentile"
+              }
+            ]
+          }
+        ]
+      }
+    }
