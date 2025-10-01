@@ -38,12 +38,24 @@ public class KafkaPrEventConsumer {
             String targetBranch = resource.path("sourceRefName").asText(null);
             String baseCommitId = resource.path("lastMergeTargetCommit").path("commitId").asText(null);
             String targetCommitId = resource.path("lastMergeSourceCommit").path("commitId").asText(null);
-            if (repoId == null || prId <= 0) {
-                log.warn("Kafka event missing required fields; skipping. key={}, offset={}", record.key(), record.offset());
+            
+            // Extract project ID from webhook metadata
+            String projectId = null;
+            JsonNode repository = resource.path("repository");
+            if (repository.isObject()) {
+                JsonNode project = repository.path("project");
+                if (project.isObject()) {
+                    projectId = project.path("id").asText(null);
+                }
+            }
+            
+            if (repoId == null || prId <= 0 || projectId == null || projectId.isBlank()) {
+                log.warn("Kafka event missing required fields; skipping. key={}, offset={}, repoId={}, prId={}, projectId={}", 
+                        record.key(), record.offset(), repoId, prId, projectId);
                 return;
             }
-            reviewPipelineService.reviewPipelineAsync(repoId, prId, baseBranch, targetBranch, baseCommitId, targetCommitId);
-            log.info("Triggered review pipeline from Kafka for prId={} repoId={}", prId, repoId);
+            reviewPipelineService.reviewPipelineAsync(repoId, prId, baseBranch, targetBranch, baseCommitId, targetCommitId, projectId);
+            log.info("Triggered review pipeline from Kafka for prId={} repoId={} projectId={}", prId, repoId, projectId);
         } catch (Exception e) {
             log.warn("Failed to process Kafka PR event; key={}, offset={}", record.key(), record.offset(), e);
         }

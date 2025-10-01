@@ -31,7 +31,6 @@ public class AzureDevOpsPrChangesService {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final String baseUrl;
-    private final String projectId;
     private final String basicAuthHeader;
     private final PrChangesWriter prChangesWriter;
     private final FileContentWriter fileContentWriter;
@@ -44,12 +43,10 @@ public class AzureDevOpsPrChangesService {
                                        FileContentWriter fileContentWriter,
                                        PrReviewService prReviewService,
                                        @Value("${ado.baseUrl}") String baseUrl,
-                                       @Value("${ado.projectId}") String projectId,
                                        @Value("${ado.pat:}") String pat) {
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newHttpClient();
         this.baseUrl = baseUrl != null && baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-        this.projectId = projectId;
         String credentials = ":" + (pat == null ? "" : pat);
         this.basicAuthHeader = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
         this.prChangesWriter = prChangesWriter;
@@ -57,14 +54,14 @@ public class AzureDevOpsPrChangesService {
         this.prReviewService = prReviewService;
     }
 
-    public void fetchAndStorePrChanges(String repoId, long prId) {
+    public void fetchAndStorePrChanges(String repoId, long prId, String projectId) {
         if (baseUrl == null || baseUrl.isBlank() || projectId == null || projectId.isBlank()) {
             log.warn("ADO baseUrl/projectId not configured; skipping PR changes fetch");
             return;
         }
         try {
-            int latestIterationId = fetchLatestIterationId(repoId, prId);
-            ObjectNode changeEntriesObject = fetchIterationChangeEntriesObject(repoId, prId, latestIterationId);
+            int latestIterationId = fetchLatestIterationId(repoId, prId, projectId);
+            ObjectNode changeEntriesObject = fetchIterationChangeEntriesObject(repoId, prId, latestIterationId, projectId);
             prChangesWriter.write(changeEntriesObject, "pr_" + prId + "_changes");
             log.info("Stored PR changes: prId={} file written", prId);
         } catch (IOException | InterruptedException e) {
@@ -73,7 +70,7 @@ public class AzureDevOpsPrChangesService {
     }
 
     public String fetchAndStoreBranchDiff(String repoId, long prId, String baseBranchRef, String targetBranchRef,
-                                          String baseCommitId, String targetCommitId) {
+                                          String baseCommitId, String targetCommitId, String projectId) {
         if (baseUrl == null || baseUrl.isBlank() || projectId == null || projectId.isBlank()) {
             log.warn("ADO baseUrl/projectId not configured; skipping PR diff fetch");
             return "";
@@ -176,14 +173,14 @@ public class AzureDevOpsPrChangesService {
                         continue;
                     }
                     
-                    byte[] baseContent = (baseCommitId == null || baseCommitId.isBlank()) ? null : fetchFileContentByPathAndCommit(repoId, path, baseCommitId);
+                    byte[] baseContent = (baseCommitId == null || baseCommitId.isBlank()) ? null : fetchFileContentByPathAndCommit(repoId, path, baseCommitId, projectId);
                     if (baseContent != null && baseContent.length > 0) { fileContentWriter.write(baseContent, "base", path); }
-                    byte[] targetContent = (targetCommitId == null || targetCommitId.isBlank()) ? null : fetchFileContentByPathAndCommit(repoId, path, targetCommitId);
+                    byte[] targetContent = (targetCommitId == null || targetCommitId.isBlank()) ? null : fetchFileContentByPathAndCommit(repoId, path, targetCommitId, projectId);
                     if (targetContent != null && targetContent.length > 0) { fileContentWriter.write(targetContent, "target", path); }
 
                     String diffText = DiffUtil.unifiedDiff(baseContent, targetContent, path);
                     if (diffText != null && !diffText.isBlank()) {
-                        try { prReviewService.reviewPrAsync(repoId, prId, diffText); } catch (Exception ignored) {}
+                        try { prReviewService.reviewPrAsync(repoId, prId, diffText, projectId); } catch (Exception ignored) {}
                     }
                 }
             }
@@ -205,7 +202,7 @@ public class AzureDevOpsPrChangesService {
         return java.net.URLEncoder.encode(branch, java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    private byte[] fetchFileContentByPathAndCommit(String repoId, String path, String commitId) throws IOException, InterruptedException {
+    private byte[] fetchFileContentByPathAndCommit(String repoId, String path, String commitId, String projectId) throws IOException, InterruptedException {
         String url = String.format(
                 "%s/%s/_apis/git/repositories/%s/items?path=%s&versionType=commit&version=%s&includeContent=true&$format=octetStream&api-version=%s",
                 baseUrl, projectId, repoId,
@@ -224,7 +221,7 @@ public class AzureDevOpsPrChangesService {
         return null;
     }
 
-    private int fetchLatestIterationId(String repoId, long prId) throws IOException, InterruptedException {
+    private int fetchLatestIterationId(String repoId, long prId, String projectId) throws IOException, InterruptedException {
         String url = String.format("%s/%s/_apis/git/repositories/%s/pullRequests/%d/iterations?api-version=%s",
                 baseUrl, projectId, repoId, prId, API_VERSION);
         HttpRequest request = HttpRequest.newBuilder()
@@ -251,7 +248,7 @@ public class AzureDevOpsPrChangesService {
         return latestId;
     }
 
-    private ObjectNode fetchIterationChangeEntriesObject(String repoId, long prId, int iterationId) throws IOException, InterruptedException {
+    private ObjectNode fetchIterationChangeEntriesObject(String repoId, long prId, int iterationId, String projectId) throws IOException, InterruptedException {
         ArrayNode combinedEntries = objectMapper.createArrayNode();
         String continuation = null;
         int page = 0;

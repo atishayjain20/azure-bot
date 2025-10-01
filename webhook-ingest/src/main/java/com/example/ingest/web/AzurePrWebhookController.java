@@ -62,6 +62,22 @@ public class AzurePrWebhookController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Missing pullRequestId");
         }
         long prId = prIdNode.asLong();
+        
+        // Extract project ID from webhook metadata
+        String projectId = null;
+        JsonNode repository = resource.path("repository");
+        if (repository.isObject()) {
+            JsonNode project = repository.path("project");
+            if (project.isObject()) {
+                projectId = project.path("id").asText(null);
+            }
+        }
+        
+        if (projectId == null || projectId.isBlank()) {
+            log.warn("Missing project ID in webhook metadata for prId={}", prId);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Missing project ID");
+        }
+        
         try {
             kafkaPublisherService.publish(String.valueOf(prId), rawBody);
         } catch (Exception e) {

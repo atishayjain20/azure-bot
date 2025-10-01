@@ -31,17 +31,18 @@ public class ReviewPipelineService {
                                     String baseBranch,
                                     String targetBranch,
                                     String baseCommitId,
-                                    String targetCommitId) {
+                                    String targetCommitId,
+                                    String projectId) {
         try {
             String diffContent = "";
             if (baseBranch != null && targetBranch != null) {
-                diffContent = prChangesService.fetchAndStoreBranchDiff(repoId, prId, baseBranch, targetBranch, baseCommitId, targetCommitId);
+                diffContent = prChangesService.fetchAndStoreBranchDiff(repoId, prId, baseBranch, targetBranch, baseCommitId, targetCommitId, projectId);
             } else {
                 log.warn("Missing branch refs; skipping branch diff fetch for prId={}", prId);
             }
 
             try {
-                prCommentsService.addCommentsToPr(repoId, prId, diffContent);
+                prCommentsService.addCommentsToPr(repoId, prId, diffContent, projectId);
             } catch (Exception e) {
                 log.warn("Failed to add initial PR comments for prId={}", prId, e);
             }
