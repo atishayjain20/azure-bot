@@ -5,19 +5,17 @@ FROM maven:3.9.6-eclipse-temurin-21 AS builder
 # Set working directory
 WORKDIR /app
 
-# Copy parent POM and all service POMs
+# Copy POM file
 COPY pom.xml /app/pom.xml
-COPY modules/webhook-ingest/pom.xml /app/webhook-ingest/pom.xml
-COPY modules/reviewer-service/pom.xml /app/reviewer-service/pom.xml
 
 # Download dependencies (this layer will be cached if pom.xml doesn't change)
-RUN mvn dependency:go-offline -f /app/pom.xml -pl reviewer-service
+RUN mvn dependency:go-offline
 
 # Copy source code
-COPY modules/reviewer-service/src /app/reviewer-service/src
+COPY src /app/src
 
 # Build the application
-RUN mvn clean package -f /app/pom.xml -pl reviewer-service -DskipTests
+RUN mvn clean package -DskipTests
 
 # Stage 2: Runtime stage
 FROM eclipse-temurin:21-jre-alpine
@@ -32,7 +30,7 @@ RUN addgroup -g 1001 appuser && adduser -D -u 1001 -G appuser appuser
 WORKDIR /app
 
 # Copy the built JAR from builder stage
-COPY --from=builder /app/reviewer-service/target/reviewer-service-*.jar app.jar
+COPY --from=builder /app/target/reviewer-service-*.jar app.jar
 
 # Change ownership to non-root user
 RUN chown -R appuser:appuser /app

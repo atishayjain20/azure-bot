@@ -3,8 +3,8 @@ version: '3.9'
 services:
   webhook-ingest:
     build:
-      context: ../../
-      dockerfile: modules/webhook-ingest/Dockerfile
+      context: ./webhook-ingest
+      dockerfile: Dockerfile
     container_name: webhook-ingest
     ports:
       - "9091:9091"
@@ -28,8 +28,8 @@ services:
 
   reviewer-service:
     build:
-      context: ../../
-      dockerfile: modules/reviewer-service/Dockerfile
+      context: ./reviewer-service
+      dockerfile: Dockerfile
     container_name: reviewer-service
     ports:
       - "9092:9092"

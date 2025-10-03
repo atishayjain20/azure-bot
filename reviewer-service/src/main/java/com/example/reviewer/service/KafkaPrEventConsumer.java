@@ -31,6 +31,7 @@ public class KafkaPrEventConsumer {
     public void onMessage(ConsumerRecord<String, String> record, @Payload String payload) {
         try {
             JsonNode root = objectMapper.readTree(payload);
+            JsonNode resourceContainers = root.path("resourceContainers");
             JsonNode resource = root.path("resource");
             String repoId = resource.path("repository").path("id").asText(null);
             long prId = resource.path("pullRequestId").asLong(-1);
@@ -41,6 +42,7 @@ public class KafkaPrEventConsumer {
             
             // Extract project ID from webhook metadata
             String projectId = null;
+            String baseUrl = null;
             JsonNode repository = resource.path("repository");
             if (repository.isObject()) {
                 JsonNode project = repository.path("project");
@@ -48,13 +50,19 @@ public class KafkaPrEventConsumer {
                     projectId = project.path("id").asText(null);
                 }
             }
+            if (resourceContainers.isObject()) {
+                JsonNode project = resourceContainers.path("project");
+                if (project.isObject()) {
+                    baseUrl = project.path("baseUrl").asText(null);
+                }
+            }
             
-            if (repoId == null || prId <= 0 || projectId == null || projectId.isBlank()) {
-                log.warn("Kafka event missing required fields; skipping. key={}, offset={}, repoId={}, prId={}, projectId={}", 
-                        record.key(), record.offset(), repoId, prId, projectId);
+            if (repoId == null || prId <= 0 || projectId == null || projectId.isBlank() || baseUrl == null || baseUrl.isBlank()) {
+                log.warn("Kafka event missing required fields; skipping. key={}, offset={}, repoId={}, prId={}, projectId={}, baseUrl={}", 
+                        record.key(), record.offset(), repoId, prId, projectId, baseUrl);
                 return;
             }
-            reviewPipelineService.reviewPipelineAsync(repoId, prId, baseBranch, targetBranch, baseCommitId, targetCommitId, projectId);
+            reviewPipelineService.reviewPipelineAsync(repoId, prId, baseBranch, targetBranch, baseCommitId, targetCommitId, projectId,baseUrl);
             log.info("Triggered review pipeline from Kafka for prId={} repoId={} projectId={}", prId, repoId, projectId);
         } catch (Exception e) {
             log.warn("Failed to process Kafka PR event; key={}, offset={}", record.key(), record.offset(), e);

@@ -188,7 +188,7 @@ public class PrReviewService {
     }
 
     @Async("taskExecutor")
-    public void reviewPrAsync(String repoId, long prId, String diffContent, String projectId) {
+    public void reviewPrAsync(String repoId, long prId, String diffContent, String projectId,String baseUrl) {
         try {
             if (diffContent == null || diffContent.isBlank()) {
                 log.info("No diff content to review for prId={}", prId);
@@ -301,7 +301,7 @@ public class PrReviewService {
                         if (!overall.isBlank()) {
                             String overallKey = repoId + ":" + prId;
                             if (overallPosted.add(overallKey)) {
-                                try { prCommentsService.addOverallPrComment(repoId, prId, overall, projectId); } catch (Exception ignore) {}
+                                try { prCommentsService.addOverallPrComment(repoId, prId, overall, projectId,baseUrl); } catch (Exception ignore) {}
                             }
                         }
                         JsonNode arr = json.path("comments");
@@ -321,7 +321,7 @@ public class PrReviewService {
                             // };
                             String prefix = ""; // No severity prefix
                             String normalized = f.startsWith("/") ? f.substring(1) : f;
-                            try { prCommentsService.addSingleLineComment(repoId, prId, normalized, line, prefix + comment, projectId); } catch (Exception ignore) {}
+                            try { prCommentsService.addSingleLineComment(repoId, prId, normalized, line, prefix + comment, projectId,baseUrl); } catch (Exception ignore) {}
                         }
                     } catch (Exception ignore) {}
                 } finally {
