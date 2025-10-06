@@ -8,13 +8,13 @@ data:
   KAFKA_SECURITY_PROTOCOL: "SASL_SSL"
   KAFKA_SASL_MECHANISM: "PLAIN"
 ---
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: ado-config
-data:
-  ADO_BASE_URL: "https://dev.azure.com/test-org-787"
-  ADO_PROJECT_ID: "cf132cec-e8c4-4965-89b8-34ca92aa0b6b"
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: ado-config
+# data:
+#   ADO_BASE_URL: "https://dev.azure.com/test-org-787"
+#   ADO_PROJECT_ID: "cf132cec-e8c4-4965-89b8-34ca92aa0b6b"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -22,7 +22,7 @@ metadata:
   name: azure-openai-config
 data:
   AZURE_OPENAI_ENDPOINT: "https://task-summarizer-openai.openai.azure.com/"
-  AZURE_OPENAI_MODEL: "gpt-4o-mini"
+  AZURE_OPENAI_MODEL: "gpt-4o"
   AZURE_OPENAI_API_VERSION: "2025-01-01-preview"
 ---
 apiVersion: v1

@@ -1,18 +1,18 @@
 # Kubernetes-specific Dockerfile for webhook-ingest service
 # Stage 1: Build stage
-FROM maven:3.9.6-eclipse-temurin-21 AS builder
+FROM maven:3.9.6-eclipse-temurin-17 AS builder
 
 # Set working directory
 WORKDIR /app
 
-# Copy the entire monorepo structure
-COPY . /app/
+# Copy the webhook-ingest module
+COPY webhook-ingest/ /app/
 
-# Build only the webhook-ingest module
-RUN mvn clean package -f /app/ADO-Microservices/pom.xml -pl modules/webhook-ingest -DskipTests
+# Build the application
+RUN mvn clean package -DskipTests
 
 # Stage 2: Runtime stage
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:17-jre-alpine
 
 # Install curl for health checks
 RUN apk add --no-cache curl
@@ -24,7 +24,7 @@ RUN addgroup -g 1001 appuser && adduser -D -u 1001 -G appuser appuser
 WORKDIR /app
 
 # Copy the built JAR from builder stage
-COPY --from=builder /app/ADO-Microservices/modules/webhook-ingest/target/webhook-ingest-*.jar app.jar
+COPY --from=builder /app/target/webhook-ingest-*.jar app.jar
 
 # Change ownership to non-root user
 RUN chown -R appuser:appuser /app
