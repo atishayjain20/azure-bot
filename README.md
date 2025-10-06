@@ -19,8 +19,6 @@ Create `.env` files with your credentials:
 
 **webhook-ingest/.env:**
 ```env
-ADO_BASE_URL=https://dev.azure.com/your-org
-ADO_PROJECT_ID=your-project-id
 ADO_PAT=your-personal-access-token
 KAFKA_BOOTSTRAPSERVERS=localhost:9092
 KAFKA_SECURITY_PROTOCOL=PLAINTEXT
@@ -32,8 +30,6 @@ SERVER_PORT=9091
 
 **reviewer-service/.env:**
 ```env
-ADO_BASE_URL=https://dev.azure.com/your-org
-ADO_PROJECT_ID=your-project-id
 ADO_PAT=your-personal-access-token
 AZURE_OPENAI_ENDPOINT=https://your-openai-resource.openai.azure.com/
 AZURE_OPENAI_API_KEY=your-openai-api-key
