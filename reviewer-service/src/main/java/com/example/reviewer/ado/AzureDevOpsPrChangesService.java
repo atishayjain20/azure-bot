@@ -30,8 +30,8 @@ public class AzureDevOpsPrChangesService {
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
-    private final String baseUrl;
-    private final String basicAuthHeader;
+    private final String baseUrl; // e.g., https://dev.azure.com/org
+    private final String basicAuthHeader; // Basic base64(:PAT)
     private final PrChangesWriter prChangesWriter;
     private final FileContentWriter fileContentWriter;
     private final PrReviewService prReviewService;
@@ -53,14 +53,15 @@ public class AzureDevOpsPrChangesService {
         this.prReviewService = prReviewService;
     }
 
-    public void fetchAndStorePrChanges(String repoId, long prId, String projectId) {
+    public void fetchAndStorePrChanges(String repoId, long prId,String projectId) {
         if (baseUrl == null || baseUrl.isBlank() || projectId == null || projectId.isBlank()) {
             log.warn("ADO baseUrl/projectId not configured; skipping PR changes fetch");
             return;
         }
         try {
-            int latestIterationId = fetchLatestIterationId(repoId, prId, projectId,baseUrl);
-            ObjectNode changeEntriesObject = fetchIterationChangeEntriesObject(repoId, prId, latestIterationId, projectId, baseUrl);
+            int latestIterationId = fetchLatestIterationId(repoId, prId,projectId,baseUrl);
+            ObjectNode changeEntriesObject = fetchIterationChangeEntriesObject(repoId, prId, latestIterationId,projectId,baseUrl);
+
             prChangesWriter.write(changeEntriesObject, "pr_" + prId + "_changes");
             log.info("Stored PR changes: prId={} file written", prId);
         } catch (IOException | InterruptedException e) {
@@ -69,7 +70,7 @@ public class AzureDevOpsPrChangesService {
     }
 
     public String fetchAndStoreBranchDiff(String repoId, long prId, String baseBranchRef, String targetBranchRef,
-                                          String baseCommitId, String targetCommitId, String projectId, String baseUrl) {
+                                          String baseCommitId, String targetCommitId, String projectId,String baseUrl) {
         if (baseUrl == null || baseUrl.isBlank() || projectId == null || projectId.isBlank()) {
             log.warn("ADO baseUrl/projectId not configured; skipping PR diff fetch");
             return "";
@@ -146,7 +147,7 @@ public class AzureDevOpsPrChangesService {
             java.util.List<String> relevantFiles = new java.util.ArrayList<>();
             if (!allFilePaths.isEmpty()) {
                 try {
-                    relevantFiles = prReviewService.filterRelevantFiles(allFilePaths);
+                    relevantFiles = prReviewService.filterRelevantFiles(allFilePaths).get();
                     log.info("LLM filtered {} files down to {} relevant files for prId={}", 
                             allFilePaths.size(), relevantFiles.size(), prId);
                 } catch (Exception e) {
@@ -201,7 +202,7 @@ public class AzureDevOpsPrChangesService {
         return java.net.URLEncoder.encode(branch, java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    private byte[] fetchFileContentByPathAndCommit(String repoId, String path, String commitId, String projectId, String baseUrl) throws IOException, InterruptedException {
+    private byte[] fetchFileContentByPathAndCommit(String repoId, String path, String commitId,String projectId, String baseUrl) throws IOException, InterruptedException {
         String url = String.format(
                 "%s/%s/_apis/git/repositories/%s/items?path=%s&versionType=commit&version=%s&includeContent=true&$format=octetStream&api-version=%s",
                 baseUrl, projectId, repoId,
@@ -220,7 +221,10 @@ public class AzureDevOpsPrChangesService {
         return null;
     }
 
-    private int fetchLatestIterationId(String repoId, long prId, String projectId, String baseUrl) throws IOException, InterruptedException {
+    // Kept for potential future use; not currently used since we fetch by path+commit
+    // Removed unused fetchBlobContent method to avoid warnings
+
+    private int fetchLatestIterationId(String repoId, long prId,String projectId,String baseUrl) throws IOException, InterruptedException {
         String url = String.format("%s/%s/_apis/git/repositories/%s/pullRequests/%d/iterations?api-version=%s",
                 baseUrl, projectId, repoId, prId, API_VERSION);
         HttpRequest request = HttpRequest.newBuilder()
@@ -247,7 +251,7 @@ public class AzureDevOpsPrChangesService {
         return latestId;
     }
 
-    private ObjectNode fetchIterationChangeEntriesObject(String repoId, long prId, int iterationId, String projectId,String baseUrl) throws IOException, InterruptedException {
+    private ObjectNode fetchIterationChangeEntriesObject(String repoId, long prId, int iterationId,String projectId,String baseUrl) throws IOException, InterruptedException {
         ArrayNode combinedEntries = objectMapper.createArrayNode();
         String continuation = null;
         int page = 0;

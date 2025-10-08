@@ -33,6 +33,7 @@ public final class PromptTemplates {
     "- If you find no issues to comment on, return an empty comments array [] and set overall to a simple message like 'No issues identified in the changes'."
 );
 
+
     public static final String FILE_FILTER_INSTRUCTIONS = String.join("\n",
             "Your task is to analyze a list of changed files from a pull request and return only the files that are relevant for a human review.",
             "",
@@ -53,7 +54,7 @@ public final class PromptTemplates {
             "* Third-Party Libraries: Any files within directories like 'vendor/', 'node_modules/', 'bower_components/'.",
             "* System-Specific Config: '.DS_Store', 'thumbs.db'");
 
-    public static final String STRICT_JSON_SCHEMA = String.join("\n",
+            public static final String STRICT_JSON_SCHEMA = String.join("\n",
             "Return STRICT JSON (no Markdown) with this schema:",
             "{",
             "  \"overall\": string,",

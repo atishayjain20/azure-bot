@@ -20,6 +20,7 @@ import com.example.reviewer.util.PromptTemplates;
 import com.example.reviewer.util.ReviewContext;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class PrReviewService {
@@ -57,12 +58,11 @@ public class PrReviewService {
                 .defaultHeader("api-key", apiKey)
                 .build();
     }
-
     @Async("taskExecutor")
-    public List<String> filterRelevantFiles(List<String> filePaths) {
+    public CompletableFuture<List<String>> filterRelevantFiles(List<String> filePaths) {
         try {
             if (filePaths == null || filePaths.isEmpty()) {
-                return new ArrayList<>();
+                return CompletableFuture.completedFuture(new ArrayList<>());
             }
 
             String fileList = String.join("\n", filePaths);
@@ -134,7 +134,7 @@ public class PrReviewService {
             try (Observation.Scope ios = httpObs.openScope()) {
                 var resp = restClient.post().body(body).retrieve().toEntity(Map.class);
                 if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
-                    return filePaths; // Return all files if filtering fails
+                    return CompletableFuture.completedFuture(filePaths); // Return all files if filtering fails
                 }
 
                 Object content = ((Map<?,?>)((Map<?,?>)((java.util.List<?>)resp.getBody().get("choices")).get(0)).get("message")).get("content");
@@ -148,11 +148,11 @@ public class PrReviewService {
                         "response.preview", responsePreview
                 ));
                 
-                if (text.isBlank()) return filePaths;
+                if (text.isBlank()) return CompletableFuture.completedFuture(filePaths);
 
                 JsonNode json = objectMapper.readTree(text);
                 JsonNode relevantFiles = json.path("relevantFiles");
-                if (!relevantFiles.isArray()) return filePaths;
+                if (!relevantFiles.isArray()) return CompletableFuture.completedFuture(filePaths);
 
                 List<String> filteredFiles = new ArrayList<>();
                 for (JsonNode file : relevantFiles) {
@@ -170,7 +170,7 @@ public class PrReviewService {
                         "filtered.files", String.join(",", filteredFiles)
                 ));
                 
-                return filteredFiles;
+                return CompletableFuture.completedFuture(filteredFiles);
             } finally {
                 httpObs.stop();
             }
@@ -183,7 +183,7 @@ public class PrReviewService {
         } catch (Exception e) {
             log.warn("Failed to filter files using LLM, returning all files", e);
             TracingUtil.recordException(Span.current(), e);
-            return filePaths; // Return all files if filtering fails
+            return CompletableFuture.completedFuture(filePaths); // Return all files if filtering fails
         }
     }
 
@@ -216,13 +216,13 @@ public class PrReviewService {
                 }
 
                 String perFilePrompt = String.join("\n\n",
-                        PromptTemplates.REVIEW_INSTRUCTIONS,
-                        "You will receive a file path and the unified diff for this single file. Review ONLY the added lines (right side) present in the diff.",
-                        "Return JSON only (no markdown).",
-                        "If no concrete issues on a line, omit it from comments. For each line, return at most ONE consolidated comment (merge duplicate or overlapping points into a single concise statement).",
-                        "file: " + file,
-                        "unified diff (this file only):\n" + diffContent
-                );
+                    PromptTemplates.REVIEW_INSTRUCTIONS,
+                    "You will receive a file path and the unified diff for this single file. Review ONLY the added lines (right side) present in the diff.",
+                    "Return JSON only (no markdown).",
+                    "If no concrete issues on a line, omit it from comments. For each line, return at most ONE consolidated comment (merge duplicate or overlapping points into a single concise statement).",
+                    "file: " + file,
+                    "unified diff (this file only):\n" + diffContent
+            );
                 promptResponseLogger.writePrompt(repoId, prId, deploymentName, perFilePrompt);
                 // Attach prompt to the Observation so it is bridged to OTel (Langfuse)
                 llmObs.highCardinalityKeyValue("gen_ai.prompt", perFilePrompt);
@@ -255,7 +255,6 @@ public class PrReviewService {
                                                                 "properties", Map.of(
                                                                         "file", Map.of("type", "string"),
                                                                         "line", Map.of("type", "integer"),
-                                                                        // "severity", Map.of("type", "string", "enum", java.util.List.of("critical","major","minor","info")),
                                                                         "comment", Map.of("type", "string"),
                                                                         "changed_line_text", Map.of("type", "string")
                                                                 ),
@@ -301,7 +300,7 @@ public class PrReviewService {
                         if (!overall.isBlank()) {
                             String overallKey = repoId + ":" + prId;
                             if (overallPosted.add(overallKey)) {
-                                try { prCommentsService.addOverallPrComment(repoId, prId, overall, projectId,baseUrl); } catch (Exception ignore) {}
+                                try { prCommentsService.addOverallPrComment(repoId, prId, overall,projectId,baseUrl); } catch (Exception ignore) {}
                             }
                         }
                         JsonNode arr = json.path("comments");
@@ -310,18 +309,10 @@ public class PrReviewService {
                             String f = Optional.ofNullable(c.path("file").asText(null)).orElse(file);
                             int line = c.path("line").asInt(-1);
                             String comment = c.path("comment").asText(null);
-                            //                             // String severity = c.path("severity").asText("");
                             if (line <= 0 || comment == null || comment.isBlank()) continue;
-                            // String prefix = switch (severity) {
-                            //     case "critical" -> "[CRITICAL] ";
-                            //     case "major" -> "[MAJOR] ";
-                            //     case "minor" -> "[minor] ";
-                            //     case "info" -> "[info] ";
-                            //     default -> "";
-                            // };
-                            String prefix = ""; // No severity prefix
+                            String prefix="";
                             String normalized = f.startsWith("/") ? f.substring(1) : f;
-                            try { prCommentsService.addSingleLineComment(repoId, prId, normalized, line, prefix + comment, projectId,baseUrl); } catch (Exception ignore) {}
+                            try { prCommentsService.addSingleLineComment(repoId, prId, normalized, line, prefix+comment, projectId, baseUrl); } catch (Exception ignore) {}
                         }
                     } catch (Exception ignore) {}
                 } finally {

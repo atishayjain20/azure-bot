@@ -35,20 +35,19 @@ public class AzureDevOpsPrCommentsService {
         this.basicAuthHeader = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
     }
 
-    public void addCommentsToPr(String repoId, long prId, String diffContent, String projectId, String baseUrl) {
+    public void addCommentsToPr(String repoId, long prId, String diffContent,String projectId,String baseUrl) {
         if (baseUrl == null || baseUrl.isBlank() || projectId == null || projectId.isBlank()) {
             log.warn("ADO baseUrl/projectId not configured; skipping PR comments");
             return;
         }
         try {
-            addLineCommentsFromDiff(repoId, prId, diffContent, projectId,baseUrl);
+            addLineCommentsFromDiff(repoId, prId, diffContent, projectId, baseUrl);
         } catch (IOException | InterruptedException e) {
             log.warn("Failed to add PR comments for prId={}", prId, e);
         }
     }
 
-    public void addOverallPrComment(String repoId, long prId, String contentText, String projectId, String baseUrl) throws IOException, InterruptedException {
-        log.debug("Adding overall PR comment: repoId={}, prId={}, projectId={}, baseUrl={}", repoId, prId, projectId, baseUrl);
+    public void addOverallPrComment(String repoId, long prId, String contentText,String projectId,String baseUrl) throws IOException, InterruptedException {
         ObjectNode comment = objectMapper.createObjectNode();
         comment.set("comments", objectMapper.createArrayNode().add(objectMapper.createObjectNode()
                 .put("parentCommentId", 0)
@@ -75,7 +74,7 @@ public class AzureDevOpsPrCommentsService {
         }
     }
 
-    private void addLineCommentsFromDiff(String repoId, long prId, String diffContent, String projectId,String baseUrl) throws IOException, InterruptedException {
+    private void addLineCommentsFromDiff(String repoId, long prId, String diffContent,String projectId,String baseUrl) throws IOException, InterruptedException {
         if (diffContent == null || diffContent.isBlank()) {
             log.debug("No diff content provided for line comments");
             return;
@@ -85,7 +84,7 @@ public class AzureDevOpsPrCommentsService {
         for (String line : lines) {
             if (line.startsWith("--- a/") || line.startsWith("+++ b/")) {
                 if (line.startsWith("+++ b/")) {
-                    currentFile = line.substring(6);
+                    currentFile = line.substring(6); // Remove "+++ b/"
                     if (currentFile != null && !currentFile.startsWith("/")) currentFile = "/" + currentFile;
                 }
                 continue;
@@ -102,11 +101,12 @@ public class AzureDevOpsPrCommentsService {
                         }
                     }
                 }
+                // continue;
             }
         }
     }
 
-    public void addLineCommentsFromDiffWithContent(String repoId, long prId, String diffContent, String content, String projectId,String baseUrl) throws IOException, InterruptedException {
+    public void addLineCommentsFromDiffWithContent(String repoId, long prId, String diffContent, String content, String projectId, String baseUrl) throws IOException, InterruptedException {
         if (diffContent == null || diffContent.isBlank()) {
             log.debug("No diff content provided for line comments");
             return;
@@ -129,15 +129,15 @@ public class AzureDevOpsPrCommentsService {
                         if (rightPart.startsWith("+")) {
                             String[] rightNumbers = rightPart.substring(1).split(",");
                             int startLine = Integer.parseInt(rightNumbers[0]);
-                            addLineComment(repoId, prId, currentFile, startLine, content, projectId,baseUrl);
+                            addLineComment(repoId, prId, currentFile, startLine, content, projectId, baseUrl);
                         }
                     }
                 }
             }
         }
     }
-
-    private void addLineComment(String repoId, long prId, String filePath, int lineNumber, String content, String projectId,String baseUrl) throws IOException, InterruptedException {
+    
+    private void addLineComment(String repoId, long prId, String filePath, int lineNumber, String content, String projectId, String baseUrl) throws IOException, InterruptedException {
         ObjectNode comment = objectMapper.createObjectNode();
         comment.set("comments", objectMapper.createArrayNode().add(objectMapper.createObjectNode()
                 .put("parentCommentId", 0)
@@ -168,11 +168,11 @@ public class AzureDevOpsPrCommentsService {
         }
     }
 
-    public void addSingleLineComment(String repoId, long prId, String filePath, int lineNumber, String content, String projectId,String baseUrl) throws IOException, InterruptedException {
+    public void addSingleLineComment(String repoId, long prId, String filePath, int lineNumber, String content, String projectId, String baseUrl) throws IOException, InterruptedException {
         if (filePath != null && !filePath.startsWith("/")) {
             filePath = "/" + filePath;
         }
-        addLineComment(repoId, prId, filePath, lineNumber, content, projectId,baseUrl);
+        addLineComment(repoId, prId, filePath, lineNumber, content, projectId, baseUrl);
     }
 }
 

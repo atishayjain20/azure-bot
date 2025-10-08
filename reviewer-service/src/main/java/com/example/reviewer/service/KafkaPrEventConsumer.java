@@ -39,15 +39,15 @@ public class KafkaPrEventConsumer {
             String targetBranch = resource.path("sourceRefName").asText(null);
             String baseCommitId = resource.path("lastMergeTargetCommit").path("commitId").asText(null);
             String targetCommitId = resource.path("lastMergeSourceCommit").path("commitId").asText(null);
-            
-            // Extract project ID from webhook metadata
             String projectId = null;
-            String baseUrl = null;
+
             JsonNode repository = resource.path("repository");
+            String baseUrl = null;
             if (repository.isObject()) {
                 JsonNode project = repository.path("project");
                 if (project.isObject()) {
                     projectId = project.path("id").asText(null);
+                    // baseUrl = project.path("baseUrl").asText(null);
                 }
             }
             if (resourceContainers.isObject()) {
@@ -56,14 +56,15 @@ public class KafkaPrEventConsumer {
                     baseUrl = project.path("baseUrl").asText(null);
                 }
             }
-            
             if (repoId == null || prId <= 0 || projectId == null || projectId.isBlank() || baseUrl == null || baseUrl.isBlank()) {
                 log.warn("Kafka event missing required fields; skipping. key={}, offset={}, repoId={}, prId={}, projectId={}, baseUrl={}", 
                         record.key(), record.offset(), repoId, prId, projectId, baseUrl);
                 return;
             }
-            reviewPipelineService.reviewPipelineAsync(repoId, prId, baseBranch, targetBranch, baseCommitId, targetCommitId, projectId,baseUrl);
-            log.info("Triggered review pipeline from Kafka for prId={} repoId={} projectId={}", prId, repoId, projectId);
+            ReviewContext.setUserId(userId);
+            ReviewContext.setSessionId(String.valueOf(prId));
+            reviewPipelineService.reviewPipelineAsync(repoId, prId, baseBranch, targetBranch, baseCommitId, targetCommitId,projectId,baseUrl);
+            log.info("Triggered review pipeline from Kafka for prId={} repoId={}", prId, repoId);
         } catch (Exception e) {
             log.warn("Failed to process Kafka PR event; key={}, offset={}", record.key(), record.offset(), e);
         }

@@ -1,102 +1,82 @@
-# Azure DevOps PR Reviewer
+# Azure PR Reviewer
 
-AI-powered pull request reviewer that automatically analyzes code changes and provides intelligent feedback.
+Automatically review Azure DevOps pull requests using AI. This service receives webhook events, analyzes code changes, and posts intelligent review comments.
 
-## 🚀 Quick Start
-
-### Prerequisites
-- Docker Desktop
-- Git
+## Quick Start with Docker
 
 ### 1. Setup Environment
 ```bash
-git clone <repository-url>
-cd ADO-Microservices/modules
+# Copy the example file
+cp .env.example .env
+
+# Edit .env with your credentials
+# - Azure DevOps PAT
+# - Azure OpenAI API key
+# - Langfuse credentials
 ```
 
-### 2. Configure Services
-Create `.env` files with your credentials:
-
-**webhook-ingest/.env:**
-```env
-ADO_PAT=your-personal-access-token
-KAFKA_BOOTSTRAPSERVERS=localhost:9092
-KAFKA_SECURITY_PROTOCOL=PLAINTEXT
-KAFKA_SASL_MECHANISM=PLAIN
-KAFKA_SASL_JAAS_CONFIG=org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
-KAFKA_TOPIC_AZURE_PR_EVENTS=azure-pr-events
-SERVER_PORT=9091
-```
-
-**reviewer-service/.env:**
-```env
-ADO_PAT=your-personal-access-token
-AZURE_OPENAI_ENDPOINT=https://your-openai-resource.openai.azure.com/
-AZURE_OPENAI_API_KEY=your-openai-api-key
-AZURE_OPENAI_MODEL=gpt-4
-OTLP_ENDPOINT=https://your-otlp-endpoint
-OTLP_AUTH_HEADER=Bearer your-token
-KAFKA_BOOTSTRAPSERVERS=localhost:9092
-KAFKA_SECURITY_PROTOCOL=PLAINTEXT
-KAFKA_SASL_MECHANISM=PLAIN
-KAFKA_SASL_JAAS_CONFIG=org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
-KAFKA_TOPIC_AZURE_PR_EVENTS=azure-pr-events
-SERVER_PORT=9092
-```
-
-### 3. Run Application
+### 2. Run with Docker Compose
 ```bash
-docker-compose up --build -d
-```
+# Start all services (app + Kafka + UI)
+docker-compose up -d --build
 
-### 4. Verify Services
-```bash
-docker-compose ps
-```
-
-## 🏗️ Architecture
-
-- **webhook-ingest** (Port 9091): Receives Azure DevOps webhooks → Kafka
-- **reviewer-service** (Port 9092): Consumes Kafka events → AI review → Azure DevOps
-- **Kafka**: Message broker between services
-- **Kafka UI** (Port 8080): Monitor messages and topics
-
-## 🛠️ Management
-
-### Start/Stop
-```bash
-# Start all services
-docker-compose up -d
-
-# Stop all services
-docker-compose down
-
-# Rebuild and start
-docker-compose up --build -d
-```
-
-### Monitor
-```bash
 # View logs
-docker-compose logs -f
+docker-compose logs -f azure-pr-reviewer
 
-# Check health
-curl http://localhost:9091/actuator/health  # webhook-ingest
-curl http://localhost:9092/actuator/health  # reviewer-service
-
-# Kafka UI
-open http://localhost:8080
+# Stop services
+docker-compose down
 ```
 
-### Troubleshooting
+### 3. Expose to Azure DevOps
 ```bash
-# Check service status
-docker-compose ps
+# Install ngrok: https://ngrok.com/
+ngrok http 9091
 
-# View specific logs
-docker-compose logs webhook-ingest
-docker-compose logs reviewer-service
-
-# Clean restart
-docker-compose down -v && docker-compose up --build -d
+# Copy the HTTPS URL (e.g., https://abc123.ngrok-free.app)
 ```
+
+### 4. Configure Azure DevOps Service Hook
+1. Go to Project Settings → Service Hooks
+2. Create subscription:
+   - **Service**: Web Hooks
+   - **Event**: Pull request created
+   - **URL**: `https://your-ngrok-url.ngrok-free.app/webhooks/azure/pr`
+
+## Services Included
+
+- **Azure PR Reviewer**: Main application (port 9091)
+- **Kafka**: Message broker (port 29092)
+- **Kafka UI**: Web interface (port 8085)
+
+## Configuration
+
+Edit `.env` file with your settings:
+
+```bash
+# Azure DevOps
+ADO_BASEURL=https://dev.azure.com/your-org
+ADO_PROJECTID=your-project-id
+ADO_PAT=your-personal-access-token
+
+# Azure OpenAI
+SPRING_AI_AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+SPRING_AI_AZURE_OPENAI_API_KEY=your-api-key
+
+# Langfuse (optional)
+OTEL_EXPORTER_OTLP_ENDPOINT=https://cloud.langfuse.com/api/public/otel/v1/traces
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic your-base64-auth
+```
+
+## How It Works
+
+1. Azure DevOps sends PR webhook → `/webhooks/azure/pr`
+2. Service fetches PR changes and file diffs
+3. AI analyzes code changes and generates review
+4. Comments are posted back to the PR
+5. All data is logged and traced
+
+## Monitoring
+
+- **Application**: http://localhost:9091/actuator/health
+- **Kafka UI**: http://localhost:8085
+- **Logs**: `docker-compose logs -f azure-pr-reviewer`

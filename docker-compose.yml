@@ -1,14 +1,55 @@
 version: '3.9'
 
 services:
+  zoo1:
+    image: zookeeper:3.9
+    container_name: zoo1
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
   webhook-ingest:
     build:
       context: ./webhook-ingest
       dockerfile: Dockerfile
     container_name: webhook-ingest
     ports:
+      - "2181:2181"
+    restart: unless-stopped
+    networks:
+      - kafka-network
+    healthcheck:
+      test: ["CMD", "zkServer.sh", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka
+    depends_on:
+      zoo1:
+        condition: service_healthy
       - "9091:9091"
     environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zoo1:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      # Increase message size limits for large PR diffs
+      KAFKA_MESSAGE_MAX_BYTES: 1048576000
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 1048576000
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: 1048576000
+      KAFKA_FETCH_MESSAGE_MAX_BYTES: 1048576000
+      KAFKA_LOG_SEGMENT_BYTES: 1048576000
+      KAFKA_LOG_RETENTION_BYTES: 1048576000
+      # JVM memory settings for large messages
+      KAFKA_HEAP_OPTS: "-Xmx2G -Xms1G"
+      KAFKA_JVM_PERFORMANCE_OPTS: "-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true"
+    ports:
+      - "29092:29092"
       - KAFKA_BOOTSTRAPSERVERS=${KAFKA_BOOTSTRAPSERVERS}
       - KAFKA_SECURITY_PROTOCOL=${KAFKA_SECURITY_PROTOCOL}
       - KAFKA_SASL_MECHANISM=${KAFKA_SASL_MECHANISM}
@@ -17,6 +58,29 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+    networks:
+      - kafka-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+      - KAFKA_CLUSTERS_0_ZOOKEEPER=zoo1:2181
+    ports:
+      - "8085:8080"
+    restart: unless-stopped
+    networks:
+      - kafka-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/actuator/health"]
       interval: 30s
@@ -30,6 +94,13 @@ services:
     build:
       context: ./reviewer-service
       dockerfile: Dockerfile
+    image: azure-pr-reviewer:latest
+    container_name: azure-pr-reviewer
+    depends_on:
+      kafka:
+        condition: service_healthy
+    env_file:
+      - .env
     container_name: reviewer-service
     ports:
       - "9092:9092"
